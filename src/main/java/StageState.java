@@ -1,8 +1,6 @@
 import org.nd4j.linalg.api.ndarray.INDArray;
 
 public class StageState{
-    private int width;
-    private int height;
 
     private final INDArray dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph;
 

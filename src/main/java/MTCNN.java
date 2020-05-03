@@ -1,3 +1,4 @@
+import org.apache.commons.io.IOUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
@@ -18,7 +19,6 @@ import static org.bytedeco.opencv.global.opencv_highgui.*;
 import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 import static org.nd4j.linalg.indexing.NDArrayIndex.*;
-import static org.nd4j.linalg.indexing.NDArrayIndex.indices;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -40,63 +40,32 @@ public class MTCNN {
     private static GraphRunner rNet;
     private static GraphRunner oNet;
 
-    public static void main(String[] args) throws Exception {
+    public MTCNN() throws Exception {
         Nd4j.setDefaultDataTypes(DataType.FLOAT, DataType.FLOAT);
 
-        String imageFile = new ClassPathResource("image/team.jpg").getFile().getAbsolutePath();
-
-        pNet = createGraphRunner("model/pnet.pb", "input_1:0","softmax_1/truediv:0","conv2d_5/BiasAdd:0");
-        rNet = createGraphRunner("model/rnet.pb", "input_2:0","softmax_2/Softmax:0","dense_3/BiasAdd:0");
-        oNet = createGraphRunner("model/onet.pb", "input_3:0","softmax_3/Softmax:0","dense_6/BiasAdd:0","dense_7/BiasAdd:0");
-
-        Mat image = imread(imageFile);
-
-        FaceAnnotation[] faceAnnotations = detectFace(image);
-
-        if(faceAnnotations.length != 0){
-            for (FaceAnnotation faceAnnotation : faceAnnotations) {
-                FaceAnnotation.BoundingBox bbox = faceAnnotation.getBoundingBox();
-
-                Point x1y1 = new Point(bbox.getX(), bbox.getY());
-                Point x2y2 = new Point(bbox.getX()+bbox.getW(), bbox.getY()+bbox.getH());
-
-                rectangle(image, x1y1, x2y2, new Scalar(255, 0, 0, 0));
-
-                for (FaceAnnotation.Landmark lm : faceAnnotation.getLandmarks()) {
-                    Point keyPoint = new Point(lm.getPosition().getX(),lm.getPosition().getY());
-                    circle(image, keyPoint, 2, new Scalar(255, 0, 0, 0), -1, 0, 0);
-                }
-            }
-        }
-
-        imshow("Input Image", image);
-
-//        Press "Esc" to close window
-        if (waitKey(0) == 27) {
-            destroyAllWindows();
-        }
+        pNet = createGraphRunner("model/pnet.pb", "input_1:0","conv2d_5/BiasAdd:0","softmax_1/truediv:0");
+        rNet = createGraphRunner("model/rnet.pb", "input_2:0","dense_3/BiasAdd:0","softmax_2/Softmax:0");
+        oNet = createGraphRunner("model/onet.pb", "input_3:0","dense_6/BiasAdd:0","dense_7/BiasAdd:0","softmax_3/Softmax:0");
     }
 
-    private static GraphRunner createGraphRunner(String tensorflowModelUri, String inputName, String... outputName) {
+    private GraphRunner createGraphRunner(String tensorflowModelUri, String inputName, String... outputName) {
         try{
-            ConfigProto cp = ConfigProto.newBuilder()
-                    .setInterOpParallelismThreads(4)
-                    .setAllowSoftPlacement(true)
-                    .setLogDevicePlacement(true)
+            ConfigProto configProto = ConfigProto.newBuilder()
+                    .setInterOpParallelismThreads(8)
                     .build();
 
             return GraphRunner.builder()
-                    .graphBytes(org.apache.commons.io.IOUtils.toByteArray(new ClassPathResource(tensorflowModelUri).getInputStream()))
+                    .graphBytes(IOUtils.toByteArray(new ClassPathResource(tensorflowModelUri).getInputStream()))
                     .inputNames(Collections.singletonList(inputName))
                     .outputNames(Arrays.asList(outputName))
-                    .sessionOptionsConfigProto(cp)
+                    .sessionOptionsConfigProto(configProto)
                     .build();
         } catch (IOException e) {
             throw new IllegalStateException(String.format("Failed to load TF model [%s] and input [%s]:", tensorflowModelUri, inputName), e);
         }
     }
 
-    static FaceAnnotation[] detectFace(Mat image) throws Exception {
+    FaceAnnotation[] detectFace(Mat image) throws Exception {
         double m = 12D / minFaceSize;
         double minLayer = Math.min(image.rows(), image.cols()) * m;
 
@@ -116,36 +85,7 @@ public class MTCNN {
         return faceAnnotation;
     }
 
-    public static BufferedImage drawFaceAnnotations(BufferedImage originalImage, FaceAnnotation[] faceAnnotations) {
-
-        Graphics2D g = originalImage.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        Stroke stroke = g.getStroke();
-        Color color = g.getColor();
-        g.setStroke(new BasicStroke(3));
-        g.setColor(Color.YELLOW);
-
-        int radius = 2;
-        for (FaceAnnotation faceAnnotation : faceAnnotations) {
-            FaceAnnotation.BoundingBox bbox = faceAnnotation.getBoundingBox();
-            g.drawRect(bbox.getX(), bbox.getY(), bbox.getW(), bbox.getH());
-            for (FaceAnnotation.Landmark lm : faceAnnotation.getLandmarks()) {
-                g.fillOval(lm.getPosition().getX() - radius, lm.getPosition().getY() - radius,
-                        2 * radius, 2 * radius);
-            }
-        }
-
-        g.setStroke(stroke);
-        g.setColor(color);
-
-        g.dispose();
-
-        return originalImage;
-    }
-
-    static Object[] stage1(Mat image, List<Double> scales) throws InterruptedException, IOException {
+    Object[] stage1(Mat image, List<Double> scales) throws IOException {
         INDArray totalBoxes = Nd4j.empty();
 
         for (Double scale : scales) {
@@ -166,6 +106,8 @@ public class MTCNN {
             )[0];
 
             if (!boxes.isEmpty()) {
+//                System.out.println(scale);
+//                System.out.println(boxes.shape()[0]);
                 INDArray pick = Utils.nms(boxes.dup(), 0.5, nmsMethod.Union);
                 if (boxes.length() > 0 && pick.length() > 0 && !pick.isEmpty()) {
                     boxes = boxes.get(indices(pick.toLongVector()), all());
@@ -206,7 +148,7 @@ public class MTCNN {
         return new Object[] { totalBoxes, Utils.pad(totalBoxes, image.cols(), image.rows()) };
     }
 
-    static Object[] stage2(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
+    Object[] stage2(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
         int numBoxes = totalBoxes.isEmpty() ? 0 : (int) totalBoxes.shape()[0];
 
         if (numBoxes == 0) {
@@ -251,7 +193,7 @@ public class MTCNN {
         return new Object[] { totalBoxes, stageState };
     }
 
-    static INDArray[] stage3(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
+    INDArray[] stage3(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
         int numBoxes = totalBoxes.isEmpty() ? 0 : (int) totalBoxes.shape()[0];
 
         if (numBoxes == 0) {
@@ -315,7 +257,7 @@ public class MTCNN {
         return new INDArray[] { totalBoxes, points };
     }
 
-    static INDArray computeTempImage(INDArray image, int numBoxes, StageState stageState, int size) throws IOException {
+    INDArray computeTempImage(INDArray image, int numBoxes, StageState stageState, int size) throws IOException {
 
         INDArray tempImg = Nd4j.zeros(size, size, 3, numBoxes);
 
@@ -335,8 +277,8 @@ public class MTCNN {
 
             if ((tmp.shape()[0] > 0 && tmp.shape()[1] > 0) || (tmp.shape()[0] == 0 && tmp.shape()[1] == 0)) {
 
-                INDArray resizedImage = resizeArray(tmp.permutei(2, 0, 1).dup(), newSize)
-                        .get(point(0), all(), all(), all()).permutei(1, 2, 0).dup();
+                INDArray resizedImage = resizeArray(tmp.permute(2, 0, 1).dup(), newSize)
+                        .get(point(0), all(), all(), all()).permute(1, 2, 0).dup();
 
                 tempImg.put(new INDArrayIndex[] { all(), all(), all(), point(k) }, resizedImage);
             }
@@ -352,7 +294,7 @@ public class MTCNN {
         return tempImg1;
     }
 
-    static INDArray resizeArray(INDArray imageCHW, Size newSizeWH) throws IOException {
+    INDArray resizeArray(INDArray imageCHW, Size newSizeWH) throws IOException {
         Assert.isTrue(imageCHW.size(0) == 3, "Input image is expected to have the [3, W, H] dimensions");
         // Mat expects [C, H, W] dimensions
         Mat mat = loader.asMat(imageCHW);
@@ -367,7 +309,7 @@ public class MTCNN {
 //        return y.div(Nd4j.expandDims(Nd4j.sum(y, dimension),dimension));
 //    }
 
-    static FaceAnnotation[] toFaceAnnotation(INDArray totalBoxes, INDArray points) {
+    FaceAnnotation[] toFaceAnnotation(INDArray totalBoxes, INDArray points) {
 
         if (totalBoxes.isEmpty()) {
             return new FaceAnnotation[0];
