@@ -1,4 +1,8 @@
+import org.bytedeco.javacpp.indexer.DoubleIndexer;
+import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_core.Point2f;
+import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
 import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -10,10 +14,12 @@ import org.nd4j.linalg.ops.transforms.Transforms;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.bytedeco.opencv.global.opencv_core.BORDER_CONSTANT;
+import static org.bytedeco.opencv.global.opencv_highgui.*;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 import static org.nd4j.linalg.indexing.NDArrayIndex.*;
 
-public class Utils {
+class Utils {
 
     static List<Double> computeScalePyramid(double m, double minLayer, double scaleFactor) {
         List<Double> scales = new ArrayList<>();
@@ -42,7 +48,7 @@ public class Utils {
         return resizedimage;
     }
 
-    public static INDArray bbreg(INDArray boundingBox, INDArray reg) {
+    static INDArray bbreg(INDArray boundingBox, INDArray reg) {
 
         if (reg.shape()[1] == 1) {
             reg = reg.transpose();
@@ -157,7 +163,7 @@ public class Utils {
     }
 
 
-    public static StageState pad(INDArray totalBoxes, int w, int h){
+    static StageState pad(INDArray totalBoxes, int w, int h){
         INDArray tmpW = totalBoxes.get(all(), point(2)).sub(totalBoxes.get(all(), point(0))).add(1);
         INDArray tmpH = totalBoxes.get(all(), point(3)).sub(totalBoxes.get(all(), point(1))).add(1);
         long numBox = totalBoxes.shape()[0];
@@ -207,5 +213,50 @@ public class Utils {
         }
 
         return new StageState(dy, edy, dx, edx, y, ey, x, ex, tmpW, tmpH);
+    }
+
+    static Mat faceAligner(Mat image, FaceAnnotation faceAnnotation){
+        double[] desiredLeftEye = new double[]{0.27, 0.27};
+        int desiredFaceWidth = 224;
+        int desiredFaceHeight = 224;
+
+        FaceAnnotation.Landmark[] landmark = faceAnnotation.getLandmarks();
+        FaceAnnotation.Landmark leftEye = landmark[0];
+        FaceAnnotation.Landmark rightEye = landmark[1];
+
+        int dY = rightEye.getPosition().getY() - leftEye.getPosition().getY();
+        int dX = rightEye.getPosition().getX() - leftEye.getPosition().getX();
+        double angle = Math.toDegrees(Math.atan2(dY, dX));
+
+        double desiredRightEyeX = 1.0 - desiredLeftEye[0];
+
+        double dist = Math.sqrt((Math.pow(dX, 2)) + (Math.pow(dY,2)));
+        double desiredDist = desiredRightEyeX - desiredLeftEye[0];
+        desiredDist = desiredDist * desiredFaceWidth;
+        double scale = desiredDist/dist;
+
+        Point2f eyesCenter = new Point2f(
+                Math.floorDiv(leftEye.getPosition().getX() + rightEye.getPosition().getX(),2),
+                Math.floorDiv(leftEye.getPosition().getY() + rightEye.getPosition().getY(),2)
+                );
+
+        Mat m = getRotationMatrix2D(eyesCenter, angle, scale);
+
+        double tX = desiredFaceWidth * 0.5;
+        double tY = desiredFaceHeight * desiredLeftEye[1];
+
+        DoubleIndexer indexer = m.createIndexer();
+        double eyeCenterX = indexer.get(0,2) + (tX - eyesCenter.get(0));
+        double eyeCenterY = indexer.get(1,2) + (tY - eyesCenter.get(1));
+        indexer.put(0, 2,  eyeCenterX);
+        indexer.put(1, 2,  eyeCenterY);
+        indexer.release();
+
+        Mat output = new Mat();
+
+        warpAffine(image, output, m, new Size(desiredFaceWidth, desiredFaceHeight),
+                INTER_CUBIC, BORDER_CONSTANT, Scalar.ZERO);
+
+        return output;
     }
 }
