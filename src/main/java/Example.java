@@ -1,7 +1,7 @@
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
 import org.bytedeco.opencv.opencv_core.Scalar;
-import org.nd4j.linalg.io.ClassPathResource;
+import org.nd4j.common.io.ClassPathResource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +13,7 @@ import static org.bytedeco.opencv.global.opencv_imgproc.rectangle;
 
 public class Example {
     public static void main(String[] args) throws Exception {
-        String imageFile = new ClassPathResource("image/adrian.jpg").getFile().getAbsolutePath();
+        String imageFile = new ClassPathResource("image/friends.jpg").getFile().getAbsolutePath();
         String outputFile = new ClassPathResource("image").getFile().getAbsolutePath() + "/image-output.jpg";
 
         Mat image = imread(imageFile);
@@ -44,7 +44,7 @@ public class Example {
         imshow("Input Image", image);
 
         for(int i = 0; i<alignedFace.size();i++){
-            imshow("aligned_"+String.valueOf(i+1), alignedFace.get(i));
+            imshow("aligned_"+ (i + 1), alignedFace.get(i));
         }
 
 

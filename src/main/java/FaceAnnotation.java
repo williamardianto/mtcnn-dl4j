@@ -20,159 +20,158 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /**
  * @author Christian Tzolov
  */
-@JsonPropertyOrder({"bbox", "confidence", "landmarks" })
+@JsonPropertyOrder({"bbox", "confidence", "landmarks"})
 public class FaceAnnotation {
 
-	@JsonProperty("bbox")
-	private BoundingBox boundingBox;
+    @JsonProperty("bbox")
+    private BoundingBox boundingBox;
 
-	/**
-	 * computed confidence that there is a face in the box
-	 */
-	private double confidence;
+    /**
+     * computed confidence that there is a face in the box
+     */
+    private double confidence;
 
-	/**
-	 * Face features coordinates.
-	 */
-	private Landmark[] landmarks;
+    /**
+     * Face features coordinates.
+     */
+    private Landmark[] landmarks;
 
-	public double getConfidence() {
-		return confidence;
-	}
+    public double getConfidence() {
+        return confidence;
+    }
 
-	public void setConfidence(double confidence) {
-		this.confidence = confidence;
-	}
+    public void setConfidence(double confidence) {
+        this.confidence = confidence;
+    }
 
-	public BoundingBox getBoundingBox() {
-		return boundingBox;
-	}
+    public BoundingBox getBoundingBox() {
+        return boundingBox;
+    }
 
-	public void setBoundingBox(BoundingBox boundingBox) {
-		this.boundingBox = boundingBox;
-	}
+    public void setBoundingBox(BoundingBox boundingBox) {
+        this.boundingBox = boundingBox;
+    }
 
-	public Landmark[] getLandmarks() {
-		return landmarks;
-	}
+    public Landmark[] getLandmarks() {
+        return landmarks;
+    }
 
-	public void setLandmarks(Landmark[] landmarks) {
-		this.landmarks = landmarks;
-	}
+    public void setLandmarks(Landmark[] landmarks) {
+        this.landmarks = landmarks;
+    }
 
-	/**
-	 * Face landmark has type (e.g. left eye) and coordinates where it appears in the picture.
-	 */
-	public static class Landmark {
-		public enum LandmarkType {
-			LEFT_EYE,
-			RIGHT_EYE,
-			NOSE,
-			MOUTH_LEFT,
-			MOUTH_RIGHT
-		}
+    /**
+     * Face landmark has type (e.g. left eye) and coordinates where it appears in the picture.
+     */
+    public static class Landmark {
+        private LandmarkType type;
+        private Position position;
 
-		public static class Position {
-			private int x;
-			private int y;
+        public static Landmark of(LandmarkType type, Position position) {
+            Landmark l = new Landmark();
+            l.setPosition(position);
+            l.setType(type);
+            return l;
+        }
 
-			public int getX() {
-				return x;
-			}
+        public LandmarkType getType() {
+            return type;
+        }
 
-			public void setX(int x) {
-				this.x = x;
-			}
+        public void setType(LandmarkType type) {
+            this.type = type;
+        }
 
-			public int getY() {
-				return y;
-			}
+        public Position getPosition() {
+            return position;
+        }
 
-			public void setY(int y) {
-				this.y = y;
-			}
+        public void setPosition(Position position) {
+            this.position = position;
+        }
 
-			public static Position of(int x, int y) {
-				Position p = new Position();
-				p.setX(x);
-				p.setY(y);
-				return p;
-			}
-		}
+        public enum LandmarkType {
+            LEFT_EYE,
+            RIGHT_EYE,
+            NOSE,
+            MOUTH_LEFT,
+            MOUTH_RIGHT
+        }
 
-		private LandmarkType type;
+        public static class Position {
+            private int x;
+            private int y;
 
-		private Position position;
+            public static Position of(int x, int y) {
+                Position p = new Position();
+                p.setX(x);
+                p.setY(y);
+                return p;
+            }
 
-		public LandmarkType getType() {
-			return type;
-		}
+            public int getX() {
+                return x;
+            }
 
-		public void setType(LandmarkType type) {
-			this.type = type;
-		}
+            public void setX(int x) {
+                this.x = x;
+            }
 
-		public Position getPosition() {
-			return position;
-		}
+            public int getY() {
+                return y;
+            }
 
-		public void setPosition(Position position) {
-			this.position = position;
-		}
+            public void setY(int y) {
+                this.y = y;
+            }
+        }
+    }
 
-		public static Landmark of(LandmarkType type, Position position) {
-			Landmark l = new Landmark();
-			l.setPosition(position);
-			l.setType(type);
-			return l;
-		}
-	}
+    public static class BoundingBox {
+        private int x;
+        private int y;
+        private int w;
+        private int h;
 
-	public static class BoundingBox {
-		private int x;
-		private int y;
-		private int w;
-		private int h;
+        public static BoundingBox of(int x, int y, int w, int h) {
+            BoundingBox b = new BoundingBox();
+            b.setX(x);
+            b.setY(y);
+            b.setW(w);
+            b.setH(h);
+            return b;
+        }
 
-		public int getX() {
-			return x;
-		}
+        public int getX() {
+            return x;
+        }
 
-		public void setX(int x) {
-			this.x = x;
-		}
+        public void setX(int x) {
+            this.x = x;
+        }
 
-		public int getY() {
-			return y;
-		}
+        public int getY() {
+            return y;
+        }
 
-		public void setY(int y) {
-			this.y = y;
-		}
+        public void setY(int y) {
+            this.y = y;
+        }
 
-		public int getW() {
-			return w;
-		}
+        public int getW() {
+            return w;
+        }
 
-		public void setW(int w) {
-			this.w = w;
-		}
+        public void setW(int w) {
+            this.w = w;
+        }
 
-		public int getH() {
-			return h;
-		}
+        public int getH() {
+            return h;
+        }
 
-		public void setH(int h) {
-			this.h = h;
-		}
-
-		public static BoundingBox of(int x, int y, int w, int h) {
-			BoundingBox b = new BoundingBox();
-			b.setX(x);
-			b.setY(y);
-			b.setW(w);
-			b.setH(h);
-			return b;
-		}
-	}
+        public void setH(int h) {
+            this.h = h;
+        }
+    }
 }

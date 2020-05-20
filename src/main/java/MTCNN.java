@@ -1,55 +1,46 @@
 import org.apache.commons.io.IOUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.Scalar;
 import org.bytedeco.opencv.opencv_core.Size;
-import org.bytedeco.opencv.opencv_core.Point;
-
 import org.datavec.image.loader.NativeImageLoader;
+import org.nd4j.common.io.Assert;
+import org.nd4j.common.io.ClassPathResource;
 import org.nd4j.linalg.api.buffer.DataType;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.INDArrayIndex;
 import org.nd4j.linalg.indexing.conditions.Conditions;
-import org.nd4j.linalg.io.Assert;
-import org.nd4j.linalg.io.ClassPathResource;
 import org.nd4j.tensorflow.conversion.graphrunner.GraphRunner;
 import org.tensorflow.framework.ConfigProto;
 
-import static org.bytedeco.opencv.global.opencv_highgui.*;
-import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
-import static org.bytedeco.opencv.global.opencv_imgproc.*;
-import static org.nd4j.linalg.indexing.NDArrayIndex.*;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_INTER_AREA;
+import static org.bytedeco.opencv.global.opencv_imgproc.resize;
+import static org.nd4j.linalg.indexing.NDArrayIndex.*;
 
 
 public class MTCNN {
     private static final int minFaceSize = 20;
     private static final double scaleFactor = 0.709;
     private static final List<Double> stepsTreshold = Arrays.asList(0.6, 0.7, 0.7);
-
-    public enum nmsMethod {Min, Union}
-
     private static final NativeImageLoader loader = new NativeImageLoader();
-
     private static GraphRunner pNet;
     private static GraphRunner rNet;
     private static GraphRunner oNet;
-
-    public MTCNN() throws Exception {
+    public MTCNN() {
         Nd4j.setDefaultDataTypes(DataType.FLOAT, DataType.FLOAT);
 
-        pNet = createGraphRunner("model/pnet.pb", "input_1:0","conv2d_5/BiasAdd:0","softmax_1/truediv:0");
-        rNet = createGraphRunner("model/rnet.pb", "input_2:0","dense_3/BiasAdd:0","softmax_2/Softmax:0");
-        oNet = createGraphRunner("model/onet.pb", "input_3:0","dense_6/BiasAdd:0","dense_7/BiasAdd:0","softmax_3/Softmax:0");
+        pNet = createGraphRunner("model/pnet.pb", "input_1:0", "conv2d_5/BiasAdd:0", "softmax_1/truediv:0");
+        rNet = createGraphRunner("model/rnet.pb", "input_2:0", "dense_3/BiasAdd:0", "softmax_2/Softmax:0");
+        oNet = createGraphRunner("model/onet.pb", "input_3:0", "dense_6/BiasAdd:0", "dense_7/BiasAdd:0", "softmax_3/Softmax:0");
     }
 
     private GraphRunner createGraphRunner(String tensorflowModelUri, String inputName, String... outputName) {
-        try{
+        try {
             ConfigProto configProto = ConfigProto.newBuilder()
                     .setInterOpParallelismThreads(8)
                     .build();
@@ -113,8 +104,7 @@ public class MTCNN {
                     boxes = boxes.get(indices(pick.toLongVector()), all());
                     if (totalBoxes.isEmpty()) {
                         totalBoxes = boxes;
-                    }
-                    else {
+                    } else {
                         totalBoxes = Nd4j.concat(0, totalBoxes, boxes);
                     }
                 }
@@ -145,17 +135,17 @@ public class MTCNN {
 //            totalBoxes = Nd4j.hstack(totalBoxes, Nd4j.expandDims(score, 1));
 
         }
-        return new Object[] { totalBoxes, Utils.pad(totalBoxes, image.cols(), image.rows()) };
+        return new Object[]{totalBoxes, Utils.pad(totalBoxes, image.cols(), image.rows())};
     }
 
     Object[] stage2(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
         int numBoxes = totalBoxes.isEmpty() ? 0 : (int) totalBoxes.shape()[0];
 
         if (numBoxes == 0) {
-            return new Object[] { totalBoxes, stageState };
+            return new Object[]{totalBoxes, stageState};
         }
         INDArray img = loader.asMatrix(image);
-        img = img.get(point(0),all(),all(), all()).permute(1,2,0);
+        img = img.get(point(0), all(), all(), all()).permute(1, 2, 0);
 
         INDArray tempImg1 = computeTempImage(img, numBoxes, stageState, 24);
 
@@ -168,15 +158,15 @@ public class MTCNN {
         INDArray ipass = Nd4j.where(score.match(1, Conditions.greaterThanOrEqual(stepsTreshold.get(1))),
                 null, null)[0];
 
-        if(ipass.length() == 0){
-            return new Object[] { Nd4j.empty(), stageState };
+        if (ipass.length() == 0) {
+            return new Object[]{Nd4j.empty(), stageState};
         }
 
-        INDArray boxes = totalBoxes.get(indices(ipass.toLongVector()),all()).dup();
+        INDArray boxes = totalBoxes.get(indices(ipass.toLongVector()), all()).dup();
         INDArray s = score.get(indices(ipass.toLongVector())).dup();
-        totalBoxes = Nd4j.hstack(boxes, Nd4j.expandDims(s,1));
+        totalBoxes = Nd4j.hstack(boxes, Nd4j.expandDims(s, 1));
 
-        INDArray mv = out1.get(indices(ipass.toLongVector()) ,all());
+        INDArray mv = out1.get(indices(ipass.toLongVector()), all());
 
         if (!totalBoxes.isEmpty() && totalBoxes.shape()[0] > 0) {
             INDArray pick = Utils.nms(totalBoxes.dup(), 0.7, nmsMethod.Union);
@@ -190,18 +180,18 @@ public class MTCNN {
 
         stageState = Utils.pad(totalBoxes, image.cols(), image.rows());
 
-        return new Object[] { totalBoxes, stageState };
+        return new Object[]{totalBoxes, stageState};
     }
 
     INDArray[] stage3(Mat image, INDArray totalBoxes, StageState stageState) throws IOException {
         int numBoxes = totalBoxes.isEmpty() ? 0 : (int) totalBoxes.shape()[0];
 
         if (numBoxes == 0) {
-            return new INDArray[] { totalBoxes, Nd4j.empty() };
+            return new INDArray[]{totalBoxes, Nd4j.empty()};
         }
 
         INDArray img = loader.asMatrix(image);
-        img = img.get(point(0),all(),all(), all()).permute(1,2,0);
+        img = img.get(point(0), all(), all(), all()).permute(1, 2, 0);
 
         INDArray tempImg1 = computeTempImage(img, numBoxes, stageState, 48);
 
@@ -216,28 +206,28 @@ public class MTCNN {
         INDArray ipass = Nd4j.where(score.match(1, Conditions.greaterThanOrEqual(stepsTreshold.get(2))),
                 null, null)[0];
 
-        if(ipass.length() == 0){
-            return new INDArray[] { Nd4j.empty(), Nd4j.empty() };
+        if (ipass.length() == 0) {
+            return new INDArray[]{Nd4j.empty(), Nd4j.empty()};
         }
 
-        INDArray boxes = totalBoxes.get(indices(ipass.toLongVector()),all()).dup();
+        INDArray boxes = totalBoxes.get(indices(ipass.toLongVector()), all()).dup();
         INDArray s = score.get(indices(ipass.toLongVector())).dup();
-        totalBoxes = Nd4j.hstack(boxes, Nd4j.expandDims(s,1));
+        totalBoxes = Nd4j.hstack(boxes, Nd4j.expandDims(s, 1));
 
-        INDArray mv = out1.get(indices(ipass.toLongVector()) ,all());
+        INDArray mv = out1.get(indices(ipass.toLongVector()), all());
 
         INDArray points = out2.get(indices(ipass.toLongVector()), all()).transpose();
 
         INDArray w = totalBoxes.get(all(), point(2)).sub(totalBoxes.get(all(), point(0))).addi(1);
         INDArray h = totalBoxes.get(all(), point(3)).sub(totalBoxes.get(all(), point(1))).addi(1);
 
-        points.put(new INDArrayIndex[] { interval(0, 5), all() },
+        points.put(new INDArrayIndex[]{interval(0, 5), all()},
                 Nd4j.repeat(w, 5)
                         .mul(points.get(interval(0, 5), all()))
                         .add(Nd4j.repeat(totalBoxes.get(all(), point(0)), 5))
                         .sub(1));
 
-        points.put(new INDArrayIndex[] { interval(5, 10), all() },
+        points.put(new INDArrayIndex[]{interval(5, 10), all()},
                 Nd4j.repeat(h, 5)
                         .mul(points.get(interval(5, 10), all()))
                         .add(Nd4j.repeat(totalBoxes.get(all(), point(1)), 5))
@@ -254,7 +244,7 @@ public class MTCNN {
             points = points.get(all(), indices(pick.toLongVector())).transpose();
         }
 
-        return new INDArray[] { totalBoxes, points };
+        return new INDArray[]{totalBoxes, points};
     }
 
     INDArray computeTempImage(INDArray image, int numBoxes, StageState stageState, int size) throws IOException {
@@ -266,10 +256,10 @@ public class MTCNN {
         for (int k = 0; k < numBoxes; k++) {
             INDArray tmp = Nd4j.zeros(stageState.getTmph().getInt(k), stageState.getTmpw().getInt(k), 3);
 
-            tmp.put(new INDArrayIndex[] {
+            tmp.put(new INDArrayIndex[]{
                             interval(stageState.getDy().getInt(k) - 1, stageState.getEdy().getInt(k)),
                             interval(stageState.getDx().getInt(k) - 1, stageState.getEdx().getInt(k)),
-                            all() },
+                            all()},
                     image.get(
                             interval(stageState.getY().getInt(k) - 1, stageState.getEy().getInt(k)),
                             interval(stageState.getX().getInt(k) - 1, stageState.getEx().getInt(k)),
@@ -280,9 +270,8 @@ public class MTCNN {
                 INDArray resizedImage = resizeArray(tmp.permute(2, 0, 1).dup(), newSize)
                         .get(point(0), all(), all(), all()).permute(1, 2, 0).dup();
 
-                tempImg.put(new INDArrayIndex[] { all(), all(), all(), point(k) }, resizedImage);
-            }
-            else {
+                tempImg.put(new INDArrayIndex[]{all(), all(), all(), point(k)}, resizedImage);
+            } else {
                 return Nd4j.empty();
             }
         }
@@ -302,12 +291,6 @@ public class MTCNN {
         //[0, W, H, 3]
         return loader.asMatrix(mat);
     }
-
-//    static INDArray softmax(INDArray input, int dimension){
-//        INDArray x = input.sub(Nd4j.expandDims(Nd4j.max(input, dimension),dimension));
-//        INDArray y = Transforms.exp(x);
-//        return y.div(Nd4j.expandDims(Nd4j.sum(y, dimension),dimension));
-//    }
 
     FaceAnnotation[] toFaceAnnotation(INDArray totalBoxes, INDArray points) {
 
@@ -346,4 +329,12 @@ public class MTCNN {
 
         return faceAnnotations;
     }
+
+//    static INDArray softmax(INDArray input, int dimension){
+//        INDArray x = input.sub(Nd4j.expandDims(Nd4j.max(input, dimension),dimension));
+//        INDArray y = Transforms.exp(x);
+//        return y.div(Nd4j.expandDims(Nd4j.sum(y, dimension),dimension));
+//    }
+
+    public enum nmsMethod {Min, Union}
 }

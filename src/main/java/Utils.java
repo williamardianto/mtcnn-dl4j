@@ -1,5 +1,4 @@
 import org.bytedeco.javacpp.indexer.DoubleIndexer;
-import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point2f;
 import org.bytedeco.opencv.opencv_core.Scalar;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.bytedeco.opencv.global.opencv_core.BORDER_CONSTANT;
-import static org.bytedeco.opencv.global.opencv_highgui.*;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 import static org.nd4j.linalg.indexing.NDArrayIndex.*;
 
@@ -60,10 +58,9 @@ class Utils {
         INDArray b3 = boundingBox.get(all(), point(2)).add(reg.get(all(), point(2)).mul(w));
         INDArray b4 = boundingBox.get(all(), point(3)).add(reg.get(all(), point(3)).mul(h));
 
-        boundingBox.put(new INDArrayIndex[] { all(), interval(0, 4) }, Nd4j.vstack(b1, b2, b3, b4).transpose());
+        boundingBox.put(new INDArrayIndex[]{all(), interval(0, 4)}, Nd4j.vstack(b1, b2, b3, b4).transpose());
         return boundingBox;
     }
-
 
 
     public static INDArray rerec(INDArray bbox) {
@@ -72,17 +69,17 @@ class Utils {
         INDArray w = bbox.get(all(), point(2)).sub(bbox.get(all(), point(0)));
         INDArray l = Transforms.max(w, h);
 
-        bbox.put(new INDArrayIndex[] { all(), point(0) }, bbox.get(all(), point(0)).add(w.mul(0.5)).sub(l.mul(0.5)));
-        bbox.put(new INDArrayIndex[] { all(), point(1) }, bbox.get(all(), point(1)).add(h.mul(0.5)).sub(l.mul(0.5)));
+        bbox.put(new INDArrayIndex[]{all(), point(0)}, bbox.get(all(), point(0)).add(w.mul(0.5)).sub(l.mul(0.5)));
+        bbox.put(new INDArrayIndex[]{all(), point(1)}, bbox.get(all(), point(1)).add(h.mul(0.5)).sub(l.mul(0.5)));
         INDArray lTile = Nd4j.repeat(l, 2).transpose();
-        bbox.put(new INDArrayIndex[] { all(), interval(2, 4) }, bbox.get(all(), interval(0, 2)).add(lTile));
+        bbox.put(new INDArrayIndex[]{all(), interval(2, 4)}, bbox.get(all(), interval(0, 2)).add(lTile));
 
         bbox = Transforms.floor(bbox);
 
         return bbox;
     }
 
-    static INDArray nms(INDArray boxes, double threshold, MTCNN.nmsMethod method){
+    static INDArray nms(INDArray boxes, double threshold, MTCNN.nmsMethod method) {
         INDArray x1 = boxes.get(all(), point(0));
         INDArray y1 = boxes.get(all(), point(1));
         INDArray x2 = boxes.get(all(), point(2));
@@ -106,10 +103,10 @@ class Utils {
             INDArray idx = sortedS.get(interval(0, lastIndex));
             pick.put(counter++, i.dup());
 
-            INDArray xx1 = Transforms.max(x1.get(Nd4j.expandDims(idx,0)), x1.get(point(i.getInt(0))));
-            INDArray yy1 = Transforms.max(y1.get(Nd4j.expandDims(idx,0)), y1.get(point(i.getInt(0))));
-            INDArray xx2 = Transforms.min(x2.get(Nd4j.expandDims(idx,0)), x2.get(point(i.getInt(0))));
-            INDArray yy2 = Transforms.min(y2.get(Nd4j.expandDims(idx,0)), y2.get(point(i.getInt(0))));
+            INDArray xx1 = Transforms.max(x1.get(idx), x1.get(point(i.getInt(0))));
+            INDArray yy1 = Transforms.max(y1.get(idx), y1.get(point(i.getInt(0))));
+            INDArray xx2 = Transforms.min(x2.get(idx), x2.get(point(i.getInt(0))));
+            INDArray yy2 = Transforms.min(y2.get(idx), y2.get(point(i.getInt(0))));
 
             INDArray w = Transforms.max(xx2.sub(xx1).add(1), 0.0f);
             INDArray h = Transforms.max(yy2.sub(yy1).add(1), 0.0f);
@@ -117,17 +114,17 @@ class Utils {
 
             int areaI = area.get(point(i.getInt(0))).getInt(0);
             INDArray o = (method == MTCNN.nmsMethod.Min) ?
-                    inter.div(Transforms.min(area.get(Nd4j.expandDims(idx, 0)), areaI)):
-                    inter.div(area.get(Nd4j.expandDims(idx, 0)).add(areaI).sub(inter));
+                    inter.div(Transforms.min(area.get(idx), areaI)) :
+                    inter.div(area.get(idx).add(areaI).sub(inter));
 
             INDArray oIdx = Nd4j.where(
                     o.match(1, Conditions.lessThanOrEqual(threshold)), null, null)[0];
 
-            if(oIdx.length() == 0){
+            if (oIdx.length() == 0) {
                 break;
             }
 
-            sortedS = sortedS.get(Nd4j.expandDims(oIdx.castTo(DataType.FLOAT), 0));
+            sortedS = sortedS.get(oIdx.castTo(DataType.FLOAT));
 
         }
 
@@ -145,11 +142,11 @@ class Utils {
 
         INDArray[] matchIndexes = Nd4j.where(imap.match(1, Conditions.greaterThanOrEqual(stepThreshold)), null, null);
 
-        if(matchIndexes.length == 1){
-            return new INDArray[] { Nd4j.empty(), Nd4j.empty() };
+        if (matchIndexes.length == 1) {
+            return new INDArray[]{Nd4j.empty(), Nd4j.empty()};
         }
         INDArray yx = Nd4j.vstack(matchIndexes[0], matchIndexes[1]).castTo(DataType.FLOAT);
-        INDArray score = Nd4j.expandDims(imap.get(yx),1);
+        INDArray score = Nd4j.expandDims(imap.get(yx), 1);
 
         reg = Nd4j.vstack(dx1.get(yx), dy1.get(yx), dx2.get(yx), dy2.get(yx)).transpose();
 
@@ -159,11 +156,11 @@ class Utils {
 
         INDArray boundingBox = Nd4j.hstack(q1, q2, score, reg);
 
-        return new INDArray[] { boundingBox, reg };
+        return new INDArray[]{boundingBox, reg};
     }
 
 
-    static StageState pad(INDArray totalBoxes, int w, int h){
+    static StageState pad(INDArray totalBoxes, int w, int h) {
         INDArray tmpW = totalBoxes.get(all(), point(2)).sub(totalBoxes.get(all(), point(0))).add(1);
         INDArray tmpH = totalBoxes.get(all(), point(3)).sub(totalBoxes.get(all(), point(1))).add(1);
         long numBox = totalBoxes.shape()[0];
@@ -180,27 +177,24 @@ class Utils {
 
         INDArray tmp = Nd4j.where(ex.match(1, Conditions.greaterThan(w)), null, null)[0];
         if (tmp.length() != 0) {
-            INDArray tmp2 = Nd4j.expandDims(tmp, 0);
-            INDArray b = ex.get(tmp2).rsub(w).add(tmpW.get(tmp2));
-            edx = edx.put(new INDArrayIndex[] { indices(tmp.toLongVector()) }, b);
-            ex = ex.put(new INDArrayIndex[] { indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()).mul(w));
+            INDArray b = ex.get(tmp).rsub(w).add(tmpW.get(tmp));
+            edx = edx.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, b);
+            ex = ex.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()).mul(w));
         }
 
         tmp = Nd4j.where(ey.match(1, Conditions.greaterThan(h)), null, null)[0];
         if (tmp.length() != 0) {
-            INDArray tmp2 = Nd4j.expandDims(tmp, 0);
-            INDArray b = ey.get(tmp2).rsub(h).add(tmpH.get(tmp2));
-            edy = edy.put(new INDArrayIndex[] { indices(tmp.toLongVector()) }, b);
-            ey = ey.put(new INDArrayIndex[] { indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()).mul(h));
+            INDArray b = ey.get(tmp).rsub(h).add(tmpH.get(tmp));
+            edy = edy.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, b);
+            ey = ey.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()).mul(h));
         }
 
         tmp = Nd4j.where(x.match(1, Conditions.lessThan(1)), null, null)[0];
         if (tmp.length() != 0) {
-            INDArray tmp2 = Nd4j.expandDims(tmp, 0);
-            INDArray b = x.get(tmp2).rsub(2);
+            INDArray b = x.get(tmp).rsub(2);
 
-            dx.put(new INDArrayIndex[] { indices(tmp.toLongVector()) }, b);
-            x = x.put(new INDArrayIndex[] { indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()));
+            dx.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, b);
+            x = x.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()));
         }
 
         tmp = Nd4j.where(y.match(1, Conditions.lessThan(1)), null, null)[0];
@@ -208,14 +202,14 @@ class Utils {
             INDArray tmp2 = Nd4j.expandDims(tmp, 0);
             INDArray b = y.get(tmp2).rsub(2);
 
-            dy.put(new INDArrayIndex[] { indices(tmp.toLongVector()) }, b);
-            y = y.put(new INDArrayIndex[] { indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()));
+            dy.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, b);
+            y = y.put(new INDArrayIndex[]{indices(tmp.toLongVector())}, Nd4j.ones(tmp.length()));
         }
 
         return new StageState(dy, edy, dx, edx, y, ey, x, ex, tmpW, tmpH);
     }
 
-    static Mat faceAligner(Mat image, FaceAnnotation faceAnnotation){
+    static Mat faceAligner(Mat image, FaceAnnotation faceAnnotation) {
         double[] desiredLeftEye = new double[]{0.27, 0.27};
         int desiredFaceWidth = 224;
         int desiredFaceHeight = 224;
@@ -230,15 +224,15 @@ class Utils {
 
         double desiredRightEyeX = 1.0 - desiredLeftEye[0];
 
-        double dist = Math.sqrt((Math.pow(dX, 2)) + (Math.pow(dY,2)));
+        double dist = Math.sqrt((Math.pow(dX, 2)) + (Math.pow(dY, 2)));
         double desiredDist = desiredRightEyeX - desiredLeftEye[0];
         desiredDist = desiredDist * desiredFaceWidth;
-        double scale = desiredDist/dist;
+        double scale = desiredDist / dist;
 
         Point2f eyesCenter = new Point2f(
-                Math.floorDiv(leftEye.getPosition().getX() + rightEye.getPosition().getX(),2),
-                Math.floorDiv(leftEye.getPosition().getY() + rightEye.getPosition().getY(),2)
-                );
+                Math.floorDiv(leftEye.getPosition().getX() + rightEye.getPosition().getX(), 2),
+                Math.floorDiv(leftEye.getPosition().getY() + rightEye.getPosition().getY(), 2)
+        );
 
         Mat m = getRotationMatrix2D(eyesCenter, angle, scale);
 
@@ -246,10 +240,10 @@ class Utils {
         double tY = desiredFaceHeight * desiredLeftEye[1];
 
         DoubleIndexer indexer = m.createIndexer();
-        double eyeCenterX = indexer.get(0,2) + (tX - eyesCenter.get(0));
-        double eyeCenterY = indexer.get(1,2) + (tY - eyesCenter.get(1));
-        indexer.put(0, 2,  eyeCenterX);
-        indexer.put(1, 2,  eyeCenterY);
+        double eyeCenterX = indexer.get(0, 2) + (tX - eyesCenter.get(0));
+        double eyeCenterY = indexer.get(1, 2) + (tY - eyesCenter.get(1));
+        indexer.put(0, 2, eyeCenterX);
+        indexer.put(1, 2, eyeCenterY);
         indexer.release();
 
         Mat output = new Mat();
